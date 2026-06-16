@@ -1,5 +1,5 @@
 // POST { text } -> structured record JSON.
-import { chat, parseJsonLoose, readJsonBody, sendJson, hasKey } from '../_openrouter.js';
+import { chat, parseJsonLoose, readJsonBody, sendJson, hasKey } from '../_openrouter.mjs';
 
 const SYSTEM = `You are a medical-records parser. Read the raw text of a single health record
 (human or veterinary) and extract structured fields. Respond with ONLY a JSON object, no prose, with keys:

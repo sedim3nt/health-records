@@ -1,5 +1,5 @@
 // POST { records } -> { summary } plain-language history overview.
-import { chat, readJsonBody, sendJson, hasKey } from '../_openrouter.js';
+import { chat, readJsonBody, sendJson, hasKey } from '../_openrouter.mjs';
 
 const DISCLAIMER = 'This summary is for organizational purposes only and is not medical advice; consult a licensed clinician.';
 

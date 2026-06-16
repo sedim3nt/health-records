@@ -1,5 +1,5 @@
 // POST { provider, patient, recordType, dateRange } -> { letter }.
-import { chat, readJsonBody, sendJson, hasKey } from '../_openrouter.js';
+import { chat, readJsonBody, sendJson, hasKey } from '../_openrouter.mjs';
 
 const SYSTEM = `You write polished, professional medical-records request letters that a patient (or pet owner)
 can send to a provider. Cite the patient's right to access their own records (for humans, reference HIPAA's
