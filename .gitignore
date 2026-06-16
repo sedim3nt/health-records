@@ -1,0 +1,9 @@
+node_modules
+dist
+release
+runtime/inbound
+runtime/vault
+.vercel
+.env
+.env.*
+*.log

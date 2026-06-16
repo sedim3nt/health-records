@@ -1,0 +1,51 @@
+{
+  "name": "health-records-prototype",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Local-first desktop vault for personal and veterinary health records.",
+  "author": "Spirittree",
+  "main": "electron/main.mjs",
+  "type": "module",
+  "scripts": {
+    "dev": "node --no-warnings scripts/dev.mjs",
+    "dev:ui": "vite",
+    "dev:api": "node --no-warnings server/index.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node --no-warnings server/index.mjs",
+    "desktop": "npm run build && electron .",
+    "package:desktop": "npm run build && electron-builder --dir"
+  },
+  "dependencies": {
+    "formidable": "^3.5.4",
+    "pdf-parse": "^2.4.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^35.5.1",
+    "electron-builder": "^24.13.3",
+    "vite": "^5.4.10"
+  },
+  "build": {
+    "appId": "dev.spirittree.healthrecordsvault",
+    "productName": "Health Records Vault",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "server/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.medical",
+      "target": [
+        "dir"
+      ]
+    }
+  }
+}
