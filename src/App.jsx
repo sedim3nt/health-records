@@ -149,6 +149,14 @@ export default function App() {
   const [letter, setLetter] = useState({ text: '', recordType: '' });
   const [copied, setCopied] = useState(false);
 
+  // --- Chat widget state ---
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatError, setChatError] = useState('');
+  const [chatThreads, setChatThreads] = useState({ human: [], vet: [] });
+  const chatScrollRef = useRef(null);
+
   const deferredQuery = useDeferredValue(query);
   const modeData = data?.modes?.[mode] ?? null;
   const activeProfile = modeData?.profiles?.[0] ?? null;
@@ -627,6 +635,57 @@ export default function App() {
     } catch {
       setCopied(false);
     }
+  }
+
+  const chatMessages = chatThreads[mode];
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages, chatBusy, chatOpen]);
+
+  async function sendChatMessage(event) {
+    event.preventDefault();
+
+    const text = chatInput.trim();
+    if (!text || chatBusy) {
+      return;
+    }
+
+    const history = chatThreads[mode];
+    const nextHistory = [...history, { role: 'user', content: text }];
+
+    setChatThreads((current) => ({ ...current, [mode]: nextHistory }));
+    setChatInput('');
+    setChatError('');
+    setChatBusy(true);
+
+    try {
+      const records = (modeData?.documents ?? []).map((document) => ({
+        title: document.title,
+        recordType: document.recordType,
+        documentDate: document.documentDate,
+        providerName: document.providerName,
+        ocrText: document.ocrText || ''
+      }));
+
+      const result = await callAi('chat', { messages: nextHistory, records });
+
+      setChatThreads((current) => ({
+        ...current,
+        [mode]: [...current[mode], { role: 'assistant', content: result.reply }]
+      }));
+    } catch (error) {
+      setChatError(error.message);
+    } finally {
+      setChatBusy(false);
+    }
+  }
+
+  function clearChat() {
+    setChatThreads((current) => ({ ...current, [mode]: [] }));
+    setChatError('');
   }
 
   if (!modeData || !activeProfile) {
@@ -1219,6 +1278,101 @@ export default function App() {
           </div>
         </div>
       </aside>
+
+      {DEMO_MODE ? (
+        <div className="chat-widget">
+          {chatOpen ? (
+            <section className="chat-window" aria-label="Records assistant">
+              <header className="chat-head">
+                <div>
+                  <p className="eyebrow">Records assistant</p>
+                  <strong>Ask about {activeProfile.displayName}</strong>
+                </div>
+                <div className="chat-head-actions">
+                  {chatMessages.length > 0 ? (
+                    <button type="button" className="chat-icon-button" onClick={clearChat} title="Clear conversation">
+                      Clear
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="chat-icon-button"
+                    onClick={() => setChatOpen(false)}
+                    aria-label="Close chat"
+                    title="Close"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </header>
+
+              <div className="chat-scroll" ref={chatScrollRef}>
+                {chatMessages.length === 0 ? (
+                  <div className="chat-intro">
+                    <p>
+                      I can answer questions about the records in this vault, explain what a result or visit
+                      summary means in plain language, and walk you through packets, requests, and the timeline.
+                    </p>
+                    <p className="chat-disclaimer">Organizational help only — not medical advice.</p>
+                    <div className="chat-suggestions">
+                      {[
+                        'What records are in my vault?',
+                        'What does my latest visit cover?',
+                        'How do I build a packet for a new clinic?'
+                      ].map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          className="chat-suggestion"
+                          onClick={() => setChatInput(suggestion)}
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  chatMessages.map((message, index) => (
+                    <div key={index} className={`chat-bubble chat-${message.role}`}>
+                      {message.content}
+                    </div>
+                  ))
+                )}
+                {chatBusy ? <div className="chat-bubble chat-assistant chat-typing">Thinking…</div> : null}
+                {chatError ? <div className="chat-bubble chat-error">{chatError}</div> : null}
+              </div>
+
+              <form className="chat-compose" onSubmit={sendChatMessage}>
+                <textarea
+                  rows={2}
+                  value={chatInput}
+                  onChange={(event) => setChatInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      sendChatMessage(event);
+                    }
+                  }}
+                  placeholder="Ask about your records or the app…"
+                />
+                <button type="submit" className="export-button chat-send" disabled={chatBusy || !chatInput.trim()}>
+                  {chatBusy ? 'Sending…' : 'Send'}
+                </button>
+              </form>
+            </section>
+          ) : null}
+
+          <button
+            type="button"
+            className="chat-fab"
+            onClick={() => setChatOpen((open) => !open)}
+            aria-expanded={chatOpen}
+            aria-label={chatOpen ? 'Close records assistant' : 'Open records assistant'}
+          >
+            {chatOpen ? '✕' : 'Ask AI'}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
