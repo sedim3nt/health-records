@@ -1,5 +1,43 @@
 // POST { messages, records } -> { reply } conversational health-records assistant.
-import { chat, readJsonBody, sendJson, hasKey } from '../_openrouter.mjs';
+import { readJsonBody, sendJson } from '../_openrouter.mjs';
+
+function hasGateway() {
+  return Boolean(process.env.CHAT_GATEWAY_URL && process.env.CHAT_GATEWAY_SECRET);
+}
+
+// Call the local-Claude-CLI gateway. Returns the assistant reply string.
+async function gatewayChat({ system, user }) {
+  const url = process.env.CHAT_GATEWAY_URL.replace(/\/+$/, '');
+  const secret = process.env.CHAT_GATEWAY_SECRET;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 90000);
+  try {
+    const response = await fetch(`${url}/chat`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        Authorization: `Bearer ${secret}`
+      },
+      body: JSON.stringify({ system, messages: [{ role: 'user', content: user }] }),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`Gateway error ${response.status}: ${detail.slice(0, 200)}`);
+    }
+
+    const data = await response.json();
+    const content = data?.reply;
+    if (!content) {
+      throw new Error('Gateway returned no reply');
+    }
+    return content;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 const DISCLAIMER =
   'I can help you organize and understand your records, but this is organizational help, not medical advice. For anything about your health or treatment, please consult a licensed clinician.';
@@ -80,7 +118,7 @@ export default async function handler(req, res) {
     return sendJson(res, 400, { error: 'Provide a messages array.' });
   }
 
-  if (!hasKey()) {
+  if (!hasGateway()) {
     return sendJson(res, 200, { reply: fallback(records, messages) });
   }
 
@@ -96,11 +134,9 @@ ${transcript(messages)}
 
 Reply to the user's most recent message.`;
 
-    const reply = await chat({
+    const reply = await gatewayChat({
       system: SYSTEM,
-      user,
-      temperature: 0.4,
-      maxTokens: 700
+      user
     });
 
     return sendJson(res, 200, { reply: reply.trim() });
