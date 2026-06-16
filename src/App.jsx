@@ -1,4 +1,7 @@
 import { startTransition, useDeferredValue, useEffect, useRef, useState } from 'react';
+import { handleDemoRequest, addExtractedDocument, getKindForProfile } from './demo/demoStore.js';
+
+const DEMO_MODE = import.meta.env.VITE_DEMO === 'true';
 
 const modeCopy = {
   human: {
@@ -92,6 +95,13 @@ function formatDate(value) {
 }
 
 async function request(path, options = {}) {
+  // In demo mode, the prototype's own /api/* endpoints resolve against an
+  // in-memory store instead of hitting the network. AI endpoints (/api/ai/*)
+  // are real Vercel serverless functions, so they still go over the wire.
+  if (DEMO_MODE && path.startsWith('/api/') && !path.startsWith('/api/ai/')) {
+    return handleDemoRequest(path, options);
+  }
+
   const headers = new Headers(options.headers || {});
 
   if (!(options.body instanceof FormData) && options.body !== undefined && !headers.has('Content-Type')) {
@@ -129,6 +139,15 @@ export default function App() {
     vet: makeImportDraft('vet')
   });
   const importInputRef = useRef(null);
+
+  // --- AI feature state ---
+  const [aiSummary, setAiSummary] = useState({ human: null, vet: null });
+  const [aiBusy, setAiBusy] = useState('');
+  const [aiError, setAiError] = useState('');
+  const [extractText, setExtractText] = useState('');
+  const [extractResult, setExtractResult] = useState(null);
+  const [letter, setLetter] = useState({ text: '', recordType: '' });
+  const [copied, setCopied] = useState(false);
 
   const deferredQuery = useDeferredValue(query);
   const modeData = data?.modes?.[mode] ?? null;
@@ -503,6 +522,113 @@ export default function App() {
     );
   }
 
+  async function callAi(endpoint, payload) {
+    const response = await fetch(`/api/ai/${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'AI request failed' }));
+      throw new Error(error.error || 'AI request failed');
+    }
+
+    return response.json();
+  }
+
+  async function summarizeHistory() {
+    if (!modeData) {
+      return;
+    }
+
+    setAiError('');
+    setAiBusy('summarize');
+
+    try {
+      const records = (modeData.documents ?? []).map((document) => ({
+        title: document.title,
+        recordType: document.recordType,
+        documentDate: document.documentDate,
+        providerName: document.providerName,
+        text: document.ocrText || ''
+      }));
+      const result = await callAi('summarize', { records });
+      setAiSummary((current) => ({ ...current, [mode]: result.summary }));
+    } catch (error) {
+      setAiError(error.message);
+    } finally {
+      setAiBusy('');
+    }
+  }
+
+  async function extractFromText() {
+    if (!extractText.trim()) {
+      setAiError('Paste some record text to extract.');
+      return;
+    }
+
+    setAiError('');
+    setAiBusy('extract');
+
+    try {
+      const result = await callAi('extract', { text: extractText });
+      setExtractResult(result);
+    } catch (error) {
+      setAiError(error.message);
+    } finally {
+      setAiBusy('');
+    }
+  }
+
+  function addExtractedToVault() {
+    if (!extractResult) {
+      return;
+    }
+
+    if (DEMO_MODE && activeProfile) {
+      addExtractedDocument(getKindForProfile(activeProfile.id), extractResult);
+      loadBootstrap(true).catch((error) => setFlash(error.message));
+      setFlash('Extracted record added to the demo vault.');
+    } else {
+      setFlash('Adding extracted records to the vault is only available in demo mode.');
+    }
+
+    setExtractResult(null);
+    setExtractText('');
+  }
+
+  async function draftRequestLetter(item) {
+    setAiError('');
+    setAiBusy(`letter-${item.id}`);
+    setLetter({ text: '', recordType: '' });
+    setCopied(false);
+
+    try {
+      const result = await callAi('requestLetter', {
+        provider: item.providerName,
+        patient: activeProfile?.displayName ?? 'the patient',
+        recordType: item.recordType,
+        dateRange: item.startedAt ? new Date(item.startedAt).toLocaleDateString() : 'the relevant visit'
+      });
+      setLetter({ text: result.letter, recordType: item.recordType });
+    } catch (error) {
+      setAiError(error.message);
+    } finally {
+      setAiBusy('');
+    }
+  }
+
+  async function copyLetter() {
+    try {
+      await navigator.clipboard.writeText(letter.text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
+
   if (!modeData || !activeProfile) {
     return (
       <div className="loading-shell">
@@ -740,6 +866,12 @@ export default function App() {
       </aside>
 
       <main className="main-stage">
+        {DEMO_MODE ? (
+          <div className="demo-banner" role="note">
+            <strong>Demo data</strong>
+            <span>Nothing here is real. Fictional personas, no PHI. AI features powered by OpenRouter.</span>
+          </div>
+        ) : null}
         <header className="hero-panel">
           <div className="hero-topline">
             <p className="eyebrow">{copy.eyebrow}</p>
@@ -776,6 +908,109 @@ export default function App() {
           {flash ? <div className="flash-banner">{flash}</div> : null}
         </header>
 
+        <section className="ai-panel">
+          <div className="block-head">
+            <p className="eyebrow">AI assist</p>
+            <span className="result-count">{aiBusy ? 'Working…' : 'Ready'}</span>
+          </div>
+          {aiError ? <div className="flash-banner ai-error">{aiError}</div> : null}
+
+          <div className="ai-grid">
+            <article className="ai-card">
+              <strong>Summarize my history</strong>
+              <p className="helper-copy helper-copy-compact">
+                Plain-language overview of {activeProfile.displayName}'s records, meds, and open follow-ups.
+              </p>
+              <button
+                type="button"
+                className="export-button"
+                disabled={aiBusy === 'summarize'}
+                onClick={summarizeHistory}
+              >
+                {aiBusy === 'summarize' ? 'Summarizing…' : 'Summarize my history'}
+              </button>
+              {aiSummary[mode] ? (
+                <div className="ai-output">
+                  <p>{aiSummary[mode]}</p>
+                </div>
+              ) : null}
+            </article>
+
+            <article className="ai-card">
+              <strong>Extract from record</strong>
+              <p className="helper-copy helper-copy-compact">
+                Paste raw record text and pull out structured fields.
+              </p>
+              <textarea
+                className="ai-textarea"
+                rows={4}
+                value={extractText}
+                onChange={(event) => setExtractText(event.target.value)}
+                placeholder="Paste scanned or copied record text here…"
+              />
+              <button
+                type="button"
+                className="export-button"
+                disabled={aiBusy === 'extract'}
+                onClick={extractFromText}
+              >
+                {aiBusy === 'extract' ? 'Extracting…' : 'Extract structure'}
+              </button>
+              {extractResult ? (
+                <div className="ai-output">
+                  <dl className="ai-extract">
+                    <div>
+                      <dt>Record type</dt>
+                      <dd>{extractResult.recordType || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt>Provider</dt>
+                      <dd>{extractResult.provider || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt>Date</dt>
+                      <dd>{extractResult.date || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt>Diagnoses</dt>
+                      <dd>{(extractResult.diagnoses || []).join(', ') || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt>Medications</dt>
+                      <dd>{(extractResult.medications || []).join(', ') || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt>Follow-ups</dt>
+                      <dd>{(extractResult.followUps || []).join(', ') || '—'}</dd>
+                    </div>
+                  </dl>
+                  {extractResult.summary ? <p className="ai-extract-summary">{extractResult.summary}</p> : null}
+                  <div className="action-row compact">
+                    <button type="button" className="ghost-button" onClick={addExtractedToVault}>
+                      Add to demo vault
+                    </button>
+                    <button type="button" className="ghost-button" onClick={() => setExtractResult(null)}>
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </article>
+          </div>
+
+          {letter.text ? (
+            <article className="ai-card ai-letter">
+              <div className="block-head">
+                <strong>Records request draft — {letter.recordType}</strong>
+                <button type="button" className="ghost-button" onClick={copyLetter}>
+                  {copied ? 'Copied' : 'Copy letter'}
+                </button>
+              </div>
+              <pre className="ai-letter-body">{letter.text}</pre>
+            </article>
+          ) : null}
+        </section>
+
         <section className="request-panel">
           <div className="block-head">
             <p className="eyebrow">Open request loops</p>
@@ -809,6 +1044,14 @@ export default function App() {
                     onClick={() => markReceived(item.id)}
                   >
                     Mark received
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    disabled={aiBusy === `letter-${item.id}`}
+                    onClick={() => draftRequestLetter(item)}
+                  >
+                    {aiBusy === `letter-${item.id}` ? 'Drafting…' : 'Draft request'}
                   </button>
                 </div>
               </article>

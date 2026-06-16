@@ -6,4 +6,6 @@ runtime/vault
 .vercel
 .env
 .env.*
+!.env.example
+!.env.demo
 *.log

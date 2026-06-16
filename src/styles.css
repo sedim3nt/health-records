@@ -673,3 +673,131 @@ h2 {
     right: -4.6rem;
   }
 }
+
+/* ---- Demo mode + AI assist ---- */
+.demo-banner {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding: 0.6rem 0.95rem;
+  border: 1px solid rgba(212, 69, 59, 0.4);
+  background: rgba(212, 69, 59, 0.12);
+}
+
+.demo-banner strong {
+  font-family: 'Syne', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.78rem;
+  color: var(--accent);
+}
+
+.demo-banner span {
+  font-size: 0.92rem;
+  color: var(--washed);
+}
+
+.ai-panel {
+  padding: 1rem 1.1rem 1.2rem;
+}
+
+.ai-panel .ai-error {
+  margin-top: 0.75rem;
+}
+
+.ai-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem;
+  margin-top: 0.85rem;
+}
+
+.ai-card {
+  display: grid;
+  gap: 0.7rem;
+  align-content: start;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 0.95rem 1rem 1.05rem;
+}
+
+.ai-card > strong {
+  font-family: 'Syne', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.95rem;
+}
+
+.ai-textarea {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  padding: 0.7rem 0.8rem;
+  background: rgba(255, 255, 255, 0.45);
+  font-family: 'Newsreader', serif;
+  resize: vertical;
+}
+
+.ai-output {
+  border-top: 1px solid var(--line);
+  padding-top: 0.7rem;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.ai-output p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.ai-extract {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.ai-extract > div {
+  display: grid;
+  grid-template-columns: 7.5rem 1fr;
+  gap: 0.6rem;
+}
+
+.ai-extract dt {
+  font-family: 'Syne', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  color: var(--washed);
+}
+
+.ai-extract dd {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.ai-extract-summary {
+  margin: 0.6rem 0 0;
+  font-style: italic;
+  color: var(--washed);
+}
+
+.ai-letter {
+  margin-top: 1rem;
+}
+
+.ai-letter .block-head {
+  align-items: center;
+}
+
+.ai-letter-body {
+  margin: 0.5rem 0 0;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.5);
+  font-family: 'Newsreader', serif;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
